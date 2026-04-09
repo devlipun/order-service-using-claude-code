@@ -1,0 +1,74 @@
+# ──────────────────────────────────────────────────────────────
+# Shared configuration (all profiles inherit these values)
+# ──────────────────────────────────────────────────────────────
+spring:
+  application:
+    name: order-service
+  jpa:
+    hibernate:
+      ddl-auto: none          # Liquibase owns the schema
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+        default_batch_fetch_size: 50
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.xml
+
+server:
+  port: 8080
+  shutdown: graceful
+  servlet:
+    context-path: /
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,loggers
+  endpoint:
+    health:
+      show-details: when_authorized
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+
+# ──────────────────────────────────────────────────────────────
+# Default / dev profile  — H2 in-memory, verbose logging
+# ──────────────────────────────────────────────────────────────
+---
+spring:
+  config:
+    activate:
+      on-profile: default
+  datasource:
+    url: jdbc:h2:mem:orderdb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;NON_KEYWORDS=VALUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  jpa:
+    show-sql: true
+  security:
+    user:
+      name: dev
+      password: dev
+
+logging:
+  level:
+    root: INFO
+    com.skmcore.orderservice: DEBUG
+    org.springframework.web: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE

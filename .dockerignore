@@ -1,0 +1,28 @@
+# Build output
+target/
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+*.classpath
+*.project
+*.settings/
+
+# Git
+.git/
+.gitignore
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docs
+*.md
+docs/
+
+# Test artefacts
+src/test/
+
+# Maven wrapper cache (fetched fresh in build stage)
+.mvn/wrapper/maven-wrapper.jar

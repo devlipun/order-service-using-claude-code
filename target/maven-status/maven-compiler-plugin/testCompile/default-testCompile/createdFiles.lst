@@ -1,0 +1,3 @@
+com\skmcore\orderservice\service\OrderServiceTest.class
+com\skmcore\orderservice\OrderServiceApplicationTests.class
+com\skmcore\orderservice\integration\OrderIntegrationTest.class
