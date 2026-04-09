@@ -3,21 +3,29 @@ package com.skmcore.orderservice.model;
 import com.skmcore.orderservice.exception.InvalidOrderStateException;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -29,7 +37,11 @@ import java.util.UUID;
 @Entity
 @Table(name = "orders")
 @Getter
+@Setter
 @NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@EntityListeners(AuditingEntityListener.class)
 public class Order {
 
     @Id
@@ -40,40 +52,69 @@ public class Order {
     @Column(nullable = false, unique = true, updatable = false)
     private String orderNumber;
 
-    @Column(nullable = false, updatable = false)
-    private UUID customerId;
-
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    @Setter
-    private OrderStatus status = OrderStatus.PENDING;
+    @Builder.Default
+    private OrderStatus status = OrderStatus.CREATED;
 
-    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "customer_id", nullable = false)
+    private Customer customer;
+
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
     private List<OrderItem> items = new ArrayList<>();
 
-    @Column(nullable = false, precision = 19, scale = 4)
+    @Column(nullable = false, precision = 12, scale = 2)
+    @Builder.Default
     private BigDecimal totalAmount = BigDecimal.ZERO;
 
-    @CreationTimestamp
+    @Embedded
+    private ShippingAddress shippingAddress;
+
+    @CreatedDate
     @Column(updatable = false)
     private Instant createdAt;
 
-    @UpdateTimestamp
+    @LastModifiedDate
     private Instant updatedAt;
 
     @Version
     private Long version;
 
+    // Convenience constructor for service layer
     public Order(String orderNumber, UUID customerId) {
         this.orderNumber = orderNumber;
-        this.customerId = customerId;
+        this.status = OrderStatus.CREATED;
+        this.items = new ArrayList<>();
+        this.totalAmount = BigDecimal.ZERO;
     }
 
-    /** State-machine guard — all status changes must go through here. */
+    // Getter for customerId convenience method
+    public UUID getCustomerId() {
+        return customer != null ? customer.getId() : null;
+    }
+
+    @PrePersist
+    private void generateOrderNumber() {
+        if (this.orderNumber == null) {
+            this.orderNumber = "ORD-" + UUID.randomUUID()
+                    .toString()
+                    .replace("-", "")
+                    .substring(0, 8)
+                    .toUpperCase();
+        }
+    }
+
+    /**
+     * State-machine guard — all status changes must go through here.
+     *
+     * @throws InvalidOrderStateException if the transition is not allowed
+     */
     public void transitionTo(OrderStatus newStatus) {
         if (!this.status.canTransitionTo(newStatus)) {
             throw new InvalidOrderStateException(
-                    "Cannot transition order %s from %s to %s".formatted(orderNumber, status, newStatus));
+                    "Cannot transition order from %s to %s".formatted(this.status, newStatus));
         }
         this.status = newStatus;
     }
@@ -92,5 +133,17 @@ public class Order {
         this.totalAmount = items.stream()
                 .map(OrderItem::getSubtotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Order other)) return false;
+        return id != null && id.equals(other.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return id != null ? id.hashCode() : 0;
     }
 }

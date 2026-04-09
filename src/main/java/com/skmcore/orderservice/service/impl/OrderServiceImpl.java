@@ -5,9 +5,11 @@ import com.skmcore.orderservice.dto.OrderResponse;
 import com.skmcore.orderservice.event.OrderEvent;
 import com.skmcore.orderservice.exception.EntityNotFoundException;
 import com.skmcore.orderservice.mapper.OrderMapper;
+import com.skmcore.orderservice.model.Customer;
 import com.skmcore.orderservice.model.Order;
 import com.skmcore.orderservice.model.OrderItem;
 import com.skmcore.orderservice.model.OrderStatus;
+import com.skmcore.orderservice.repository.CustomerRepository;
 import com.skmcore.orderservice.repository.OrderRepository;
 import com.skmcore.orderservice.service.OrderService;
 import lombok.RequiredArgsConstructor;
@@ -15,8 +17,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.retry.annotation.Backoff;
-import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,18 +28,20 @@ import java.util.UUID;
 @Slf4j
 public class OrderServiceImpl implements OrderService {
 
-    private static final String ORDER_NUMBER_PREFIX = "ORD";
-
     private final OrderRepository orderRepository;
+    private final CustomerRepository customerRepository;
     private final OrderMapper orderMapper;
     private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
-    @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 200))
     public OrderResponse createOrder(CreateOrderRequest request) {
-        String orderNumber = generateOrderNumber();
-        Order order = new Order(orderNumber, request.customerId());
+        Customer customer = customerRepository.findById(request.customerId())
+                .orElseThrow(() -> new EntityNotFoundException("Customer not found: " + request.customerId()));
+
+        Order order = Order.builder()
+                .customer(customer)
+                .build();
 
         request.items().forEach(itemReq -> {
             OrderItem item = new OrderItem(
@@ -54,7 +56,7 @@ public class OrderServiceImpl implements OrderService {
         Order saved = orderRepository.save(order);
         log.info("Created order orderNumber={} customerId={}", saved.getOrderNumber(), saved.getCustomerId());
 
-        eventPublisher.publishEvent(new OrderEvent(this, saved.getId(), saved.getOrderNumber(), OrderStatus.PENDING));
+        eventPublisher.publishEvent(new OrderEvent(this, saved.getId(), saved.getOrderNumber(), OrderStatus.CREATED));
         return orderMapper.toResponse(saved);
     }
 
@@ -109,13 +111,5 @@ public class OrderServiceImpl implements OrderService {
     private Order findOrderById(UUID id) {
         return orderRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Order not found: " + id));
-    }
-
-    private String generateOrderNumber() {
-        String candidate;
-        do {
-            candidate = ORDER_NUMBER_PREFIX + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-        } while (orderRepository.existsByOrderNumber(candidate));
-        return candidate;
     }
 }

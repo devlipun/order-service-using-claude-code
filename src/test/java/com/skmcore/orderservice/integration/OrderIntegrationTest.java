@@ -81,7 +81,7 @@ class OrderIntegrationTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.orderNumber").isNotEmpty())
-                .andExpect(jsonPath("$.status").value(OrderStatus.PENDING.name()))
+                .andExpect(jsonPath("$.status").value(OrderStatus.CREATED.name()))
                 .andExpect(jsonPath("$.items").isArray())
                 .andExpect(jsonPath("$.totalAmount").value("59.9700"));
     }
